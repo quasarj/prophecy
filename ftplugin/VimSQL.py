@@ -5,7 +5,6 @@ import time
 from PyQt4 import QtGui, QtCore
 
 from aoc.db.databases import default_connection
-from aoc.db.oracle import Orela
 
 
 window = None
