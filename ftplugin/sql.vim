@@ -1,8 +1,12 @@
 
 
-let s:plugin_path = escape(expand('<sfile>:p:h'), '\')
-python import vim, sys; sys.path.append(vim.eval("s:plugin_path"))
-exe 'pyfile ' . s:plugin_path . '/VimSQL.py'
+if !exists('g:vimsql_py_loaded')
+    let s:plugin_path = escape(expand('<sfile>:p:h'), '\')
+    python import vim, sys; sys.path.append(vim.eval("s:plugin_path"))
+    exe 'pyfile ' . s:plugin_path . '/VimSQL.py'
+
+    let g:vimsql_py_loaded = 1
+endif
 
 command! -complete=shellcmd -nargs=+ -range RSQL <line1>,<line2>call s:RunSQLCommand(<q-args>)
 function! s:RunSQLCommand(cmdline) range
