@@ -215,8 +215,6 @@ def run_sql(cmdline, from_line, to_line):
         start = start - 1 # zero index
 
     query = '\n'.join(vim.current.buffer[start:end]).replace(';', '')
-    print query
-    return
 
     if not window:
         t = threading.Thread(target=showWindow) #, args=(data, headers))
