@@ -169,17 +169,54 @@ def showWindow():
     del window
     window = None
 
+def detect_query(from_line, to_line):
+    """Figure out where the query begins and ends"""
+    
+    start = from_line - 1  #zero index
+    end = to_line
+
+    # if the user had the cursor on a ; line, look one up from there
+    if start != 0 and vim.current.buffer[start].startswith(';'):
+        start -= 1
+        end -= 1
+
+    # search backwards until we find a ; in the first position or row 0
+    while start > 0:
+        if vim.current.buffer[start].startswith(';'):
+            break
+        start -= 1
+
+    # search forwards until we find a ; or the end of the file
+    buff_len = len(vim.current.buffer)
+    while end < buff_len:
+        if vim.current.buffer[end].startswith(';'):
+            break
+        end += 1
+
+    # if the start was on a ;, actually start one line down from there
+    if start != 0:
+        start += 1 
+
+    return (start, end)
 
 def run_sql(cmdline, from_line, to_line):
     global window
 
-    # break the commandline up here
+    # TODO: break the commandline up here
     database = cmdline
 
-    from_line = int(from_line) - 1  # buffer is 0-index
-    to_line = int(to_line)          # however, to_line reports one less
+    start = int(from_line)
+    end = int(to_line)
 
-    query = '\n'.join(vim.current.buffer[from_line:to_line]).replace(';', '')
+    if from_line == to_line:
+        # range not given, must detect it now
+        start, end = detect_query(start, end)
+    else:
+        start = start - 1 # zero index
+
+    query = '\n'.join(vim.current.buffer[start:end]).replace(';', '')
+    print query
+    return
 
     if not window:
         t = threading.Thread(target=showWindow) #, args=(data, headers))
