@@ -1,9 +1,11 @@
 
 
-"TODO: add a var define to ensure this code is never executed twicw!
-"       Without it, this gets executed every time you switch to a sql buffer
-let s:plugin_path = escape(expand('<sfile>:p:h'), '\')
-exe 'pyfile ' . s:plugin_path . '/VimSQL.py'
+if !exists('g:vimsql_py_loaded')
+    let s:plugin_path = escape(expand('<sfile>:p:h'), '\')
+    exe 'pyfile ' . s:plugin_path . '/VimSQL.py'
+
+    let g:vimsql_py_loaded = 1
+endif
 
 command! -complete=shellcmd -nargs=+ -range RSQL <line1>,<line2>call s:RunSQLCommand(<q-args>)
 function! s:RunSQLCommand(cmdline) range
