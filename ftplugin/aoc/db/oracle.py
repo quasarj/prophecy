@@ -1,4 +1,5 @@
 import random
+import time
 
 class Oracle(object):
     pass
@@ -20,5 +21,7 @@ class Orela(object):
         return self.execute(None)
 
     def execute(self, query):
+        # real queries take a while to run, mimic that
+        time.sleep(random.random()*3)
         return [[int(random.random()*10) or None for x in range(5)] for j in range(50)]
 

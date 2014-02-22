@@ -2,7 +2,7 @@ import vim
 import sys
 import threading
 import time
-from PyQt4 import QtGui, QtCore
+from PyQt4 import Qt, QtGui, QtCore
 
 from aoc.db.databases import default_connection
 
@@ -14,7 +14,7 @@ class Window(QtGui.QWidget):
 
     pop_signal = QtCore.pyqtSignal(object, object)
     execute_signal = QtCore.pyqtSignal(object, object)
-
+    processing_signal = QtCore.pyqtSignal(bool)
 
     conn = None
     cur = None
@@ -23,7 +23,7 @@ class Window(QtGui.QWidget):
 
     scroll_pause = False
 
-    def __init__(self): #, data, headers):
+    def __init__(self):
         QtGui.QWidget.__init__(self)
         self.table = QtGui.QTableWidget(1, 1, self)
         self.table.verticalHeader().setDefaultSectionSize(19)
@@ -34,17 +34,32 @@ class Window(QtGui.QWidget):
 
         # self.buttonMore = QtGui.QPushButton('More', self)
         # self.buttonMore.clicked.connect(self.get_more)
+        self.messageLabel = QtGui.QLabel(self)
 
         layout = QtGui.QVBoxLayout(self)
         layout.addWidget(self.table)
+
+        layout.addWidget(self.messageLabel)
 
         # layout.addWidget(self.buttonMore)
         # layout.addWidget(self.buttonSave)
 
         self.pop_signal.connect(self.populate)
         self.execute_signal.connect(self.execute)
+        self.processing_signal.connect(self.set_processing)
 
         self.table.verticalScrollBar().valueChanged.connect(self.scroll)
+
+    def set_processing(self, state):
+        """Show processing message and hide table, or reverse of that"""
+        if state:
+            self.table.hide()
+            self.messageLabel.show()
+            self.messageLabel.setText("Processing query...")
+        else:
+            self.table.show()
+            self.messageLabel.hide()
+
 
     def scroll(self, val):
         if not self.scroll_pause:
@@ -81,6 +96,12 @@ class Window(QtGui.QWidget):
 
     def execute(self, database, query):
         self.scroll_pause = True
+        self.processing_signal.emit(True) # hide the table
+        t = threading.Thread(target=self.run_query, args=(database, query))
+        t.start()
+
+
+    def run_query(self, database, query):
         # reuse existing DB connection if this is for the same DB
         if self.database != database:
             if self.conn:
@@ -96,9 +117,14 @@ class Window(QtGui.QWidget):
         
         data = self.cur.fetchmany(50)
 
-        self.populate(data, headers)
-        self.scroll_pause = False
+        #populate, but on the GUI thread
+        self.pop_signal.emit(data, headers)
 
+        self.scroll_pause = False
+        self.processing_signal.emit(False) # show the table
+
+    # this will probably have to be moved to the same
+    # thread as run_query? I doubt it'll work like this
     def get_more(self):
         if self.cur:
             
