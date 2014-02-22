@@ -19,6 +19,7 @@ class Window(QtGui.QWidget):
     conn = None
     cur = None
     database = None
+    data = None
 
     scroll_pause = False
 
@@ -53,6 +54,9 @@ class Window(QtGui.QWidget):
 
 
     def populate(self, data, headers):
+        self.data = data
+        self.headers = headers
+
         # clear the table
         self.table.setRowCount(0)
         self.table.setColumnCount(0)
@@ -99,6 +103,7 @@ class Window(QtGui.QWidget):
         if self.cur:
             
             data = self.cur.fetchmany(50)
+            self.data.extend(data)
 
             current = self.table.rowCount()
             self.table.setRowCount(current + len(data))
@@ -118,6 +123,10 @@ class Window(QtGui.QWidget):
         if color:
             item.setBackgroundColor(QtGui.QColor(*color))
         self.table.setItem(x, y, item)
+
+    def append(self):
+        for row in self.data:
+            vim.current.buffer.append(','.join([str(i) for i in row]))
 
     # def handleSave(self):
     #     path = QtGui.QFileDialog.getSaveFileName(
