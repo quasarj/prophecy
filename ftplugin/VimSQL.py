@@ -62,6 +62,10 @@ class Window(QtGui.QWidget):
         self.table.setRowCount(0)
         self.table.setColumnCount(0)
 
+        if len(data) == 0:
+            print "Query returned no results!"
+            return
+
         # set the real values
         self.table.setRowCount(len(data))
         self.table.setColumnCount(len(data[0]))

@@ -1,5 +1,7 @@
 
 
+"TODO: add a var define to ensure this code is never executed twicw!
+"       Without it, this gets executed every time you switch to a sql buffer
 let s:plugin_path = escape(expand('<sfile>:p:h'), '\')
 exe 'pyfile ' . s:plugin_path . '/VimSQL.py'
 
