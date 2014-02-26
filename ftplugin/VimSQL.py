@@ -54,6 +54,7 @@ class Window(QtGui.QWidget):
     pop_signal = QtCore.pyqtSignal(object, object)
     execute_signal = QtCore.pyqtSignal(object, object)
     processing_signal = QtCore.pyqtSignal(bool)
+    message_signal = QtCore.pyqtSignal(object)
 
     conn = None
     cur = None
@@ -86,6 +87,7 @@ class Window(QtGui.QWidget):
         self.pop_signal.connect(self.populate)
         self.execute_signal.connect(self.execute)
         self.processing_signal.connect(self.set_processing)
+        self.message_signal.connect(self.set_message)
 
         self.table.verticalScrollBar().valueChanged.connect(self.scroll)
 
@@ -98,6 +100,12 @@ class Window(QtGui.QWidget):
         else:
             self.table.show()
             self.messageLabel.hide()
+
+    def set_message(self, message):
+        """Show a message and hdie the table"""
+        self.table.hide()
+        self.messageLabel.setText(message)
+        self.messageLabel.show()
 
 
     def scroll(self, val):
@@ -114,6 +122,12 @@ class Window(QtGui.QWidget):
         # clear the table
         self.table.setRowCount(0)
         self.table.setColumnCount(0)
+        if headers is None:
+            self.message_signal.emit("{} rows affected.".format(data))
+            return
+        if len(data) == 0:
+            self.message_signal.emit("Query returned no results!")
+            return
 
         # set the real values
         self.table.setRowCount(len(data))
@@ -150,17 +164,26 @@ class Window(QtGui.QWidget):
 
         self.cur = self.conn.cursor()
 
-        self.cur.execute(query)
+        try:
+            self.cur.execute(query)
+        except Exception as e:
+            self.message_signal.emit("Error: {}".format(e))
+            return
 
-        headers = [i[0] for i in self.cur.description]
-        
-        data = self.cur.fetchmany(50)
+        if self.cur.description:
+            headers = [i[0] for i in self.cur.description]
+            data = self.cur.fetchmany(50)
 
-        #populate, but on the GUI thread
-        self.pop_signal.emit(data, headers)
+            # populate, but on the GUI thread
+            self.pop_signal.emit(data, headers)
+
+            self.processing_signal.emit(False) # show the table
+        else: # if this was not a select query
+            # pass the rows affected instead
+            self.pop_signal.emit(self.cur.rowcount, None)
+
 
         self.scroll_pause = False
-        self.processing_signal.emit(False) # show the table
 
     # this will probably have to be moved to the same
     # thread as run_query? I doubt it'll work like this
