@@ -10,6 +10,45 @@ from aoc.db.databases import default_connection
 window = None
 app = None
 
+class VariableEntryDialog(QtGui.QDialog):
+    def __init__(self, variables, defaults=None): #, data, headers):
+        QtGui.QWidget.__init__(self)
+
+        layout = QtGui.QVBoxLayout(self)
+        self.inputs = []
+
+        if defaults:
+            defaults = dict(zip(variables, defaults))
+
+        for v in variables:
+            h = QtGui.QHBoxLayout()
+
+            label = QtGui.QLabel(str(v), self)
+            if defaults:
+                edit = QtGui.QLineEdit(defaults[v], self)
+            else:
+                edit = QtGui.QLineEdit(self)
+
+            edit.returnPressed.connect(self.onOkayClicked)
+
+            self.inputs.append(edit)
+
+            h.addWidget(label)
+            h.addWidget(edit)
+            layout.addLayout(h)
+
+
+        okay = QtGui.QPushButton("Okay", self)
+        layout.addWidget(okay)
+
+        okay.clicked.connect(self.onOkayClicked)
+
+        self.inputs[0].setFocus()
+
+    def onOkayClicked(self):
+        self.result = [i.text() for i in self.inputs]
+        self.accept()
+
 class Window(QtGui.QWidget):
 
     pop_signal = QtCore.pyqtSignal(object, object)
