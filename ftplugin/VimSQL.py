@@ -123,6 +123,11 @@ class Window(QtGui.QWidget):
             self.conn = default_connection.get(database)
             self.database = database
 
+        try:
+            self.conn.ping()
+        except:
+            self.conn = default_connection.get(database)
+
         self.cur = self.conn.cursor()
 
         try:
