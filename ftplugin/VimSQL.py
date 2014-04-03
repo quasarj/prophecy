@@ -58,14 +58,15 @@ def run_sql(cmdline, from_line, to_line):
 
 def send_execute(database, query):
     global proc
+    path = '/home/quasar/.vim/bundle/VimSQL/ftplugin'
 
     if proc is None:
+        proc = subprocess.Popen([path + "/app.py"], stdin=subprocess.PIPE)
         
     message = {
         'type': 'query',
         'database': database,
         'query': query,
     }
-    with open("/tmp/vimsql.fifo", "wb") as fifo:
-        fifo.write(json.dumps(message))
+    proc.stdin.write(json.dumps(message) + '|')
 

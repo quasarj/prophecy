@@ -74,7 +74,7 @@ class Window(QtGui.QWidget):
             QtGui.QApplication.quit()
 
     def handle_message(self, message):
-        print "New message: {}".format(message)
+        # print "New message: {}".format(message)
 
         if message['type'] == 'query':
             self.execute_signal.emit(message['database'], message['query'])
