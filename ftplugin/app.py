@@ -5,10 +5,9 @@ import threading
 import time
 import json
 from PyQt4 import Qt, QtGui, QtCore
+import neovim
 
 from aoc.db.databases import default_connection
-import inlib
-
 
 window = None
 app = None
@@ -29,6 +28,15 @@ class Window(QtGui.QWidget):
 
     def __init__(self):
         QtGui.QWidget.__init__(self)
+        self.init_gui()
+        self.init_vim()
+
+        # t = threading.Thread(target=self.listen_to_fifo)
+        t = threading.Thread(target=self.listen_for_message)
+        t.daemon = True # ensure the thread dies gracefully at shutdown
+        t.start()
+
+    def init_gui(self):
         self.setWindowTitle("VimSQL 0.2")
 
         self.table = QtGui.QTableWidget(1, 1, self)
@@ -51,33 +59,32 @@ class Window(QtGui.QWidget):
         
         self.set_message("Awaiting connection from Vim...")
 
-        # t = threading.Thread(target=self.listen_to_fifo)
-        t = threading.Thread(target=self.listen_for_message)
-        t.daemon = True # ensure the thread dies gracefully at shutdown
-        t.start()
-
-    def listen_to_fifo(self):
-        while True:
-            try:
-                with open('/tmp/vimsql.fifo', 'rb') as fifo:
-                    message = json.loads(fifo.read())
-                    if message['type'] == 'query':
-                        self.execute_signal.emit(message['database'], message['query'])
-            except Exception as e:
-                if isinstance(e, IOError): raise
+    def init_vim(self):
+        self.vim = neovim.connect('/tmp/neovim')
 
     def listen_for_message(self):
-        try:
-            inlib.get_messages(self.handle_message)
-        except inlib.NoMoreMessages:
-            print "Vim has disconnected! Shutting down!"
-            QtGui.QApplication.quit()
+        while True:
+            try:
+                self.handle_message(self.vim.next_event())
+            except Exception as e:
+                print "Vim has disconnected! Shutting down!"
+                print e
+                QtGui.QApplication.quit()
 
     def handle_message(self, message):
-        # print "New message: {}".format(message)
+        print "New message: {}".format(message)
+        mtype, args = message
 
-        if message['type'] == 'query':
-            self.execute_signal.emit(message['database'], message['query'])
+        if mtype == 'query':
+            db, first, last = args
+
+            query = ' '.join(self.vim.buffers[0][first - 1:last])
+
+            print db
+            print first, last
+            print query
+
+            self.execute_signal.emit(db, query)
 
     def set_processing(self, state):
         """Show processing message and hide table, or reverse of that"""
