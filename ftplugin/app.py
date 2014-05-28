@@ -26,10 +26,10 @@ class Window(QtGui.QWidget):
 
     scroll_pause = False
 
-    def __init__(self):
+    def __init__(self, socket):
         QtGui.QWidget.__init__(self)
         self.init_gui()
-        self.init_vim()
+        self.init_vim(socket)
 
         # t = threading.Thread(target=self.listen_to_fifo)
         t = threading.Thread(target=self.listen_for_message)
@@ -59,8 +59,8 @@ class Window(QtGui.QWidget):
         
         self.set_message("Awaiting connection from Vim...")
 
-    def init_vim(self):
-        self.vim = neovim.connect('/tmp/neovim')
+    def init_vim(self, socket):
+        self.vim = neovim.connect(socket)
 
     def listen_for_message(self):
         while True:
@@ -68,8 +68,8 @@ class Window(QtGui.QWidget):
                 self.handle_message(self.vim.next_event())
             except Exception as e:
                 print "Vim has disconnected! Shutting down!"
-                print e
                 QtGui.QApplication.quit()
+                return
 
     def handle_message(self, message):
         print "New message: {}".format(message)
@@ -78,13 +78,42 @@ class Window(QtGui.QWidget):
         if mtype == 'query':
             db, first, last = args
 
-            query = ' '.join(self.vim.buffers[0][first - 1:last])
+            if first == last:
+                first, last = detect_query(self.vim, first)
+            else:
+                first -= 1
+
+            query = '\n'.join(self.vim.current.buffer[first:last])
 
             print db
             print first, last
             print query
 
             self.execute_signal.emit(db, query)
+
+        if mtype == 'insertquery':
+            self.handle_insertquery(args)
+
+    def handle_insertquery(self, args):
+        db, first, last = args
+        print "insertquery was requested"
+
+        tab_size = max(
+            [len(i) for i in self.headers]) + 1
+
+        # create a new scratch buffer
+        self.vim.command("new")
+        self.vim.command("setlocal buftype=nofile")
+        self.vim.command("setlocal bufhidden=hide")
+        self.vim.command("setlocal noswapfile")
+        self.vim.command("setlocal nowrap")
+        self.vim.command("setlocal ts={}".format(tab_size))
+
+        self.vim.current.buffer[0] = '\t'.join([str(i) for i in self.headers])
+
+        for row in self.data:
+            self.vim.current.buffer.append(
+                '\t'.join([str(i) for i in row]))
 
     def set_processing(self, state):
         """Show processing message and hide table, or reverse of that"""
@@ -211,12 +240,42 @@ class Window(QtGui.QWidget):
             item.setBackgroundColor(QtGui.QColor(*color))
         self.table.setItem(x, y, item)
 
-def showWindow():
+def detect_query(vim, line_number):
+    """Figure out where the query begins and ends"""
+    
+    start = line_number - 1  #zero index
+    end = line_number
+
+    # if the user had the cursor on a ; line, look one up from there
+    if start != 0 and vim.current.buffer[start].startswith(';'):
+        start -= 1
+        end -= 1
+
+    # search backwards until we find a ; in the first position or row 0
+    while start > 0:
+        if vim.current.buffer[start].startswith(';'):
+            break
+        start -= 1
+
+    # search forwards until we find a ; or the end of the file
+    buff_len = len(vim.current.buffer)
+    while end < buff_len:
+        if vim.current.buffer[end].startswith(';'):
+            break
+        end += 1
+
+    # if the start was on a ;, actually start one line down from there
+    if start != 0:
+        start += 1 
+
+    return (start, end)
+
+def showWindow(socket):
     app = QtGui.QApplication(sys.argv)
-    window = Window()
+    window = Window(socket)
     window.show()
     sys.exit(app.exec_())
 
 
 if __name__ == "__main__":
-    showWindow()
+    showWindow(sys.argv[1])
