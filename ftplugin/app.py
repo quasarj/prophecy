@@ -5,12 +5,53 @@ import threading
 import time
 import json
 from PyQt4 import Qt, QtGui, QtCore
-import neovim
+# from neovim import socket_session, Nvim
+# import neovim
+from neovim import attach
 
 from aoc.db.databases import default_connection
 
 window = None
 app = None
+
+class VariableEntryDialog(QtGui.QDialog):
+    def __init__(self, variables, defaults=None): #, data, headers):
+        QtGui.QWidget.__init__(self)
+
+        layout = QtGui.QVBoxLayout(self)
+        self.inputs = []
+
+        if defaults:
+            defaults = dict(zip(variables, defaults))
+
+        for v in variables:
+            h = QtGui.QHBoxLayout()
+
+            label = QtGui.QLabel(str(v), self)
+            if defaults:
+                edit = QtGui.QLineEdit(defaults[v], self)
+            else:
+                edit = QtGui.QLineEdit(self)
+
+            edit.returnPressed.connect(self.onOkayClicked)
+
+            self.inputs.append(edit)
+
+            h.addWidget(label)
+            h.addWidget(edit)
+            layout.addLayout(h)
+
+
+        okay = QtGui.QPushButton("Okay", self)
+        layout.addWidget(okay)
+
+        okay.clicked.connect(self.onOkayClicked)
+
+        self.inputs[0].setFocus()
+
+    def onOkayClicked(self):
+        self.result = [i.text() for i in self.inputs]
+        self.accept()
 
 class Window(QtGui.QWidget):
 
@@ -60,23 +101,29 @@ class Window(QtGui.QWidget):
         self.set_message("Awaiting connection from Vim...")
 
     def init_vim(self, socket):
-        self.vim = neovim.connect(socket)
+        self.vim = attach('socket', path=socket)
+        self.vim.vars['vimsql_channel_id'] = self.vim.channel_id
+        # self.vim_session = socket_session(socket)
+        # self.vim = Nvim.from_session(self.vim_session)
 
     def listen_for_message(self):
         while True:
             try:
-                self.handle_message(self.vim.next_event())
+                self.handle_message(self.vim.session.next_message())
+                # self.handle_message(self.vim.next_message())
             except Exception as e:
+                print e
+                print repr(e)
                 print "Vim has disconnected! Shutting down!"
                 QtGui.QApplication.quit()
                 return
 
     def handle_message(self, message):
         print "New message: {}".format(message)
-        mtype, args = message
+        ntype, mtype, args = message
 
         if mtype == 'query':
-            db, first, last = args
+            db, first, last = args[0]
 
             if first == last:
                 first, last = detect_query(self.vim, first)
@@ -276,6 +323,14 @@ def showWindow(socket):
     window.show()
     sys.exit(app.exec_())
 
+def test_variable_entry(data):
+    app = QtGui.QApplication(sys.argv)
+    window = VariableEntryDialog(data)
+    window.exec_()
+    print window.result
+    sys.exit(app.exec_())
 
 if __name__ == "__main__":
     showWindow(sys.argv[1])
+    # test_variable_entry(['a', 'b', 'c'])
+

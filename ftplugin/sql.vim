@@ -6,12 +6,12 @@ endif
 
 command! -complete=shellcmd -nargs=+ -range RSQL <line1>,<line2>call s:RunSQLCommand(<q-args>)
 function! s:RunSQLCommand(cmdline) range
-    call send_event(1, 'query', [a:cmdline, a:firstline, a:lastline])
+    call rpcnotify(g:vimsql_channel_id, 'query', [a:cmdline, a:firstline, a:lastline])
 endfunction
 
 command! -complete=shellcmd -nargs=+ -range ISQL <line1>,<line2>call s:InsertSQLCommand(<q-args>)
 function! s:InsertSQLCommand(cmdline) range
-    call send_event(1, 'insertquery', [a:cmdline, a:firstline, a:lastline])
+    call rpcnotify(g:vimsql_channel_id, 'insertquery', [a:cmdline, a:firstline, a:lastline])
 endfunction
 
 
