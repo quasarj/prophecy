@@ -103,6 +103,9 @@ class Window(QtGui.QWidget):
     def init_vim(self, socket):
         self.vim = attach('socket', path=socket)
         self.vim.vars['vimsql_channel_id'] = self.vim.channel_id
+        # notify that we are up and running
+        sys.stderr.write("Ready")
+
         # self.vim_session = socket_session(socket)
         # self.vim = Nvim.from_session(self.vim_session)
 
@@ -221,9 +224,9 @@ class Window(QtGui.QWidget):
     def execute(self, database, query):
 
         # it is here that we must detect that variables need to be bound
-        win = VariableEntryDialog(self, ['first', 'second', 'third'])
-        win.exec_()
-        print win.result
+        # win = VariableEntryDialog(self, ['first', 'second', 'third'])
+        # win.exec_()
+        # print win.result
 
 
         self.scroll_pause = True
