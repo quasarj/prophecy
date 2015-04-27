@@ -15,8 +15,8 @@ window = None
 app = None
 
 class VariableEntryDialog(QtGui.QDialog):
-    def __init__(self, variables, defaults=None): #, data, headers):
-        QtGui.QWidget.__init__(self)
+    def __init__(self, parent, variables, defaults=None): #, data, headers):
+        QtGui.QWidget.__init__(self, parent)
 
         layout = QtGui.QVBoxLayout(self)
         self.inputs = []
@@ -136,6 +136,7 @@ class Window(QtGui.QWidget):
             print first, last
             print query
 
+
             self.execute_signal.emit(db, query)
 
         if mtype == 'insertquery':
@@ -218,6 +219,13 @@ class Window(QtGui.QWidget):
         self.table.resizeColumnsToContents()
 
     def execute(self, database, query):
+
+        # it is here that we must detect that variables need to be bound
+        win = VariableEntryDialog(self, ['first', 'second', 'third'])
+        win.exec_()
+        print win.result
+
+
         self.scroll_pause = True
         self.processing_signal.emit(True) # hide the table
         t = threading.Thread(target=self.run_query, args=(database, query))
