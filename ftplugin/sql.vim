@@ -3,6 +3,10 @@ if !exists('g:vimsql_py_loaded')
     let g:vimsql_py_loaded = 1
     let g:vimsql_job_id = 0
     let g:vimsql_channel_id = 0
+
+    if !exists('g:vimsql_env')
+        let g:vimsql_env = 'convtst2'
+    endif
 endif
 
 function! s:SQLJobHandler(job_id, data, event) abort
@@ -50,21 +54,21 @@ function! s:VimSQLRunCommand(type, args)
 endfunction
 
 
-command! -complete=shellcmd -nargs=+ -range RSQL <line1>,<line2>call s:RunSQLCommand(<q-args>)
+command! -complete=shellcmd -nargs=0 -range RSQL <line1>,<line2>call s:RunSQLCommand(<q-args>)
 function! s:RunSQLCommand(cmdline) range
-    call s:VimSQLRunCommand('query', [a:cmdline, a:firstline, a:lastline])
+    call s:VimSQLRunCommand('query', [g:vimsql_env, a:firstline, a:lastline])
 endfunction
 
-command! -complete=shellcmd -nargs=+ -range ISQL <line1>,<line2>call s:InsertSQLCommand(<q-args>)
+command! -complete=shellcmd -nargs=0 -range ISQL <line1>,<line2>call s:InsertSQLCommand(<q-args>)
 function! s:InsertSQLCommand(cmdline) range
-    call s:VimSQLRunCommand('insertquery', [a:cmdline, a:firstline, a:lastline])
+    call s:VimSQLRunCommand('insertquery', [g:vimsql_env, a:firstline, a:lastline])
 endfunction
 
 
-nmap <buffer> <F9> :RSQL convtst2<CR>
-nmap <buffer> - :RSQL convtst2<CR>
-vmap <buffer> - :RSQL convtst2<CR>
+nmap <buffer> <F9> :RSQL<CR>
+nmap <buffer> - :RSQL<CR>
+vmap <buffer> - :RSQL<CR>
 
-nmap <buffer> <leader>e :RSQL convtst2<CR>
-vmap <buffer> <leader>e :RSQL convtst2<CR>
+nmap <buffer> <leader>e :RSQL<CR>
+vmap <buffer> <leader>e :RSQL<CR>
 
