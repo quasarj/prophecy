@@ -266,7 +266,11 @@ class Window(QtGui.QWidget):
             params = None
 
         try:
-            self.cur.execute(query, params)
+            if params is None:
+                self.cur.execute(query)
+            else:
+                self.cur.execute(query, params)
+
         except Exception as e:
             self.message_signal.emit("Error: {}".format(e))
             return
