@@ -97,7 +97,7 @@ class Window(QtGui.QWidget):
         self.message_signal.connect(self.set_message)
 
         self.table.verticalScrollBar().valueChanged.connect(self.scroll)
-        
+
         self.set_message("Awaiting connection from Vim...")
 
     def init_vim(self, socket):
@@ -224,18 +224,26 @@ class Window(QtGui.QWidget):
     def execute(self, database, query):
 
         # it is here that we must detect that variables need to be bound
-        # win = VariableEntryDialog(self, ['first', 'second', 'third'])
-        # win.exec_()
-        # print win.result
+        #TODO: this may break, non thread safe?
+        self.connect_to_database(database)
+        binds = None
+        vars = None
 
+        self.cur.prepare(query)
+        binds = self.cur.bindnames()
+
+        if binds:
+            win = VariableEntryDialog(self, binds)
+            win.exec_()
+            vars = win.result
 
         self.scroll_pause = True
         self.processing_signal.emit(True) # hide the table
-        t = threading.Thread(target=self.run_query, args=(database, query))
+        t = threading.Thread(target=self.run_query, args=(database, query, binds, vars))
         t.start()
 
 
-    def run_query(self, database, query):
+    def connect_to_database(self, database):
         # reuse existing DB connection if this is for the same DB
         if self.database != database:
             if self.conn:
@@ -243,6 +251,7 @@ class Window(QtGui.QWidget):
             self.conn = default_connection.get(database)
             self.database = database
 
+        # auto re-connect if disconnected
         try:
             self.conn.ping()
         except:
@@ -250,8 +259,14 @@ class Window(QtGui.QWidget):
 
         self.cur = self.conn.cursor()
 
+    def run_query(self, database, query, binds, vars):
+        if binds and vars:
+            params = dict(zip(binds, map(str, vars)))
+        else:
+            params = None
+
         try:
-            self.cur.execute(query)
+            self.cur.execute(query, params)
         except Exception as e:
             self.message_signal.emit("Error: {}".format(e))
             return
@@ -275,7 +290,7 @@ class Window(QtGui.QWidget):
     # thread as run_query? I doubt it'll work like this
     def get_more(self):
         if self.cur:
-            
+
             data = self.cur.fetchmany(50)
             self.data.extend(data)
 
@@ -288,11 +303,11 @@ class Window(QtGui.QWidget):
 
     def add_item(self, x, y, value):
         # color = None if x % 2 else (238, 238, 238, 255)
-        color = None 
+        color = None
         if value is None:
             value = "{null}"
             color = (242, 255, 188, 255)
-        
+
         item = QtGui.QTableWidgetItem(str(value))
         if color:
             item.setBackgroundColor(QtGui.QColor(*color))
@@ -300,7 +315,7 @@ class Window(QtGui.QWidget):
 
 def detect_query(vim, line_number):
     """Figure out where the query begins and ends"""
-    
+
     start = line_number - 1  #zero index
     end = line_number
 
@@ -324,7 +339,7 @@ def detect_query(vim, line_number):
 
     # if the start was on a ;, actually start one line down from there
     if start != 0:
-        start += 1 
+        start += 1
 
     return (start, end)
 
