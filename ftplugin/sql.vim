@@ -9,6 +9,13 @@ if !exists('g:vimsql_py_loaded')
     endif
 endif
 
+function! s:SQLSetEnv()
+    let g:vimsql_env = input('Environment (connect string): ')
+    redraw
+    echo "Environment now set to: " . g:vimsql_env
+endfunction
+
+
 function! s:SQLJobHandler(job_id, data, event) abort
     if a:event == 'exit'
         let g:vimsql_job_id = 0
@@ -69,6 +76,5 @@ nmap <buffer> <F9> :RSQL<CR>
 nmap <buffer> - :RSQL<CR>
 vmap <buffer> - :RSQL<CR>
 
-nmap <buffer> <leader>e :RSQL<CR>
-vmap <buffer> <leader>e :RSQL<CR>
-
+" the sid appears to be required to call an s: func directly from a map
+nmap <buffer> <leader>p :call <SID>SQLSetEnv()<CR>

@@ -9,10 +9,12 @@ from PyQt4 import Qt, QtGui, QtCore
 # import neovim
 from neovim import attach
 
-from aoc.db.databases import default_connection
+from aoc.db.connections import DefaultConnection
 
 window = None
 app = None
+
+entries = {}
 
 class VariableEntryDialog(QtGui.QDialog):
     def __init__(self, parent, variables, defaults=None): #, data, headers):
@@ -222,9 +224,9 @@ class Window(QtGui.QWidget):
         self.table.resizeColumnsToContents()
 
     def execute(self, database, query):
+        global entries
 
         # it is here that we must detect that variables need to be bound
-        #TODO: this may break, non thread safe?
         self.connect_to_database(database)
         binds = None
         vars = None
@@ -233,9 +235,13 @@ class Window(QtGui.QWidget):
         binds = self.cur.bindnames()
 
         if binds:
-            win = VariableEntryDialog(self, binds)
+            defaults = [entries.get(i, '') for i in binds]
+            win = VariableEntryDialog(self,
+                                      binds, defaults)
+                                      #[entries.get(i) for i in binds])
             win.exec_()
             vars = win.result
+            entries.update(dict(zip(binds, vars)))  # merge new values into history
 
         self.scroll_pause = True
         self.processing_signal.emit(True) # hide the table
@@ -248,14 +254,14 @@ class Window(QtGui.QWidget):
         if self.database != database:
             if self.conn:
                     self.conn.close()
-            self.conn = default_connection.get(database)
+            self.conn = DefaultConnection(database)
             self.database = database
 
         # auto re-connect if disconnected
         try:
             self.conn.ping()
         except:
-            self.conn = default_connection.get(database)
+            self.conn = DefaultConnection(database)
 
         self.cur = self.conn.cursor()
 
