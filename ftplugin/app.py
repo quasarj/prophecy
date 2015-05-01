@@ -4,9 +4,9 @@ import sys
 import threading
 import time
 import json
+from dateutil import parser
+
 from PyQt4 import Qt, QtGui, QtCore
-# from neovim import socket_session, Nvim
-# import neovim
 from neovim import attach
 
 from aoc.db.connections import DefaultConnection
@@ -16,8 +16,44 @@ app = None
 
 entries = {}
 
+
+def parse_var_magic(vars):
+    """Check each variable for the 'magic' string
+
+    If found, convert to the data type specified, if possible.
+    """
+    ret = []
+    for var in vars:
+        var = str(var)
+        if var.startswith('~date: '):
+            _, date = var.split(': ')
+            var = convert_to_date(date)
+        elif var.startswith('~number: '):
+            _, num = var.split(': ')
+            var = float(num)
+
+        ret.append(var)
+
+    print("Final parsed vars:")
+    print(ret)
+    return ret
+
+
+def convert_to_date(string):
+    """Attempt to parse the given string using several different
+    formats before giving up"""
+
+    try:
+        return parser.parse(string)
+    except:
+        pass
+
+    raise RuntimeError("Failed to parse your date string: {}. "
+                       "I tried as hard as I could!".format(string))
+
+
 class VariableEntryDialog(QtGui.QDialog):
-    def __init__(self, parent, variables, defaults=None): #, data, headers):
+    def __init__(self, parent, variables, defaults=None):  # , data, headers):
         QtGui.QWidget.__init__(self, parent)
 
         layout = QtGui.QVBoxLayout(self)
@@ -43,7 +79,6 @@ class VariableEntryDialog(QtGui.QDialog):
             h.addWidget(edit)
             layout.addLayout(h)
 
-
         okay = QtGui.QPushButton("Okay", self)
         layout.addWidget(okay)
 
@@ -54,6 +89,7 @@ class VariableEntryDialog(QtGui.QDialog):
     def onOkayClicked(self):
         self.result = [i.text() for i in self.inputs]
         self.accept()
+
 
 class Window(QtGui.QWidget):
 
@@ -76,11 +112,11 @@ class Window(QtGui.QWidget):
 
         # t = threading.Thread(target=self.listen_to_fifo)
         t = threading.Thread(target=self.listen_for_message)
-        t.daemon = True # ensure the thread dies gracefully at shutdown
+        t.daemon = True  # ensure the thread dies gracefully at shutdown
         t.start()
 
     def init_gui(self):
-        self.setWindowTitle("VimSQL 0.2")
+        self.setWindowTitle("VimSQL 0.3")
 
         self.table = QtGui.QTableWidget(1, 1, self)
         self.table.verticalHeader().setDefaultSectionSize(19)
@@ -124,6 +160,9 @@ class Window(QtGui.QWidget):
                 return
 
     def handle_message(self, message):
+        if message is None:
+            return
+
         print "New message: {}".format(message)
         ntype, mtype, args = message
 
@@ -141,11 +180,48 @@ class Window(QtGui.QWidget):
             print first, last
             print query
 
-
             self.execute_signal.emit(db, query)
 
         if mtype == 'insertquery':
             self.handle_insertquery(args)
+
+        if mtype == 'describe_simple':
+            self.handle_describe_simple(args)
+
+    def handle_describe_simple(self, args):
+        database, object = args[0]
+        if '.' in object:
+            owner, object = object.split('.')
+        else:
+            owner = None
+
+        query = ("""
+            select
+                column_name,
+                data_type,
+                data_length,
+                nullable,
+                data_default,
+                comments
+            from all_tab_columns
+            natural join all_col_comments
+            where table_name = upper(:name)
+            and (
+                (:owner is not null and owner = upper(:owner))
+                or
+                (:owner is null and owner = user)
+            )
+            order by owner, table_name, column_id
+                 """)
+
+        binds = ['NAME', 'OWNER']
+        vars = [object, owner]
+
+        self.scroll_pause = True
+        self.processing_signal.emit(True)  # hide the table
+        t = threading.Thread(target=self.run_query,
+                             args=(database, query, binds, vars))
+        t.start()
 
     def handle_insertquery(self, args):
         db, first, last = args
@@ -187,9 +263,8 @@ class Window(QtGui.QWidget):
     def scroll(self, val):
         if not self.scroll_pause:
             max = self.table.verticalScrollBar().maximum()
-            if val >= max: # user has scrolled to the end
+            if val >= max:  # user has scrolled to the end
                 self.get_more()
-
 
     def populate(self, data, headers):
         self.data = data
@@ -209,17 +284,15 @@ class Window(QtGui.QWidget):
         self.table.setRowCount(len(data))
         self.table.setColumnCount(len(data[0]))
 
-
         # for j,field in enumerate(headers):
         #     item = QtGui.QTableWidgetItem(str(field))
         #     self.table.setHorizontalHeaderItem(j, item)
         # self.table.setHorizontalHeaderLabels(headers)
         self.table.setHorizontalHeaderLabels(headers)
 
-        for i,row in enumerate(data):
-            for j,field in enumerate(row):
+        for i, row in enumerate(data):
+            for j, field in enumerate(row):
                 self.add_item(i, j, field)
-
 
         self.table.resizeColumnsToContents()
 
@@ -236,18 +309,23 @@ class Window(QtGui.QWidget):
 
         if binds:
             defaults = [entries.get(i, '') for i in binds]
-            win = VariableEntryDialog(self,
-                                      binds, defaults)
-                                      #[entries.get(i) for i in binds])
+            win = VariableEntryDialog(self, binds, defaults)
             win.exec_()
             vars = win.result
-            entries.update(dict(zip(binds, vars)))  # merge new values into history
 
-        self.scroll_pause = True
-        self.processing_signal.emit(True) # hide the table
-        t = threading.Thread(target=self.run_query, args=(database, query, binds, vars))
-        t.start()
+            # merge new values into history
+            entries.update(dict(zip(binds, vars)))
 
+        try:
+            if vars:
+                vars = parse_var_magic(vars)
+            self.scroll_pause = True
+            self.processing_signal.emit(True)  # hide the table
+            t = threading.Thread(target=self.run_query,
+                                 args=(database, query, binds, vars))
+            t.start()
+        except Exception as e:
+            self.message_signal.emit("Error: {}".format(e))
 
     def connect_to_database(self, database):
         # reuse existing DB connection if this is for the same DB
@@ -267,10 +345,13 @@ class Window(QtGui.QWidget):
 
     def run_query(self, database, query, binds, vars):
         if binds and vars:
-            params = dict(zip(binds, map(str, vars)))
+            params = dict(zip(binds, vars))
         else:
             params = None
 
+        print("Executing query:")
+        print(query)
+        print("Params: {}".format(params))
         try:
             if params is None:
                 self.cur.execute(query)
@@ -288,11 +369,10 @@ class Window(QtGui.QWidget):
             # populate, but on the GUI thread
             self.pop_signal.emit(data, headers)
 
-            self.processing_signal.emit(False) # show the table
-        else: # if this was not a select query
+            self.processing_signal.emit(False)  # show the table
+        else:  # if this was not a select query
             # pass the rows affected instead
             self.pop_signal.emit(self.cur.rowcount, None)
-
 
         self.scroll_pause = False
 
@@ -307,8 +387,8 @@ class Window(QtGui.QWidget):
             current = self.table.rowCount()
             self.table.setRowCount(current + len(data))
 
-            for i,row in enumerate(data):
-                for j,field in enumerate(row):
+            for i, row in enumerate(data):
+                for j, field in enumerate(row):
                     self.add_item(current + i, j, field)
 
     def add_item(self, x, y, value):
@@ -323,10 +403,11 @@ class Window(QtGui.QWidget):
             item.setBackgroundColor(QtGui.QColor(*color))
         self.table.setItem(x, y, item)
 
+
 def detect_query(vim, line_number):
     """Figure out where the query begins and ends"""
 
-    start = line_number - 1  #zero index
+    start = line_number - 1  # zero index
     end = line_number
 
     # if the user had the cursor on a ; line, look one up from there
@@ -353,20 +434,22 @@ def detect_query(vim, line_number):
 
     return (start, end)
 
+
 def showWindow(socket):
     app = QtGui.QApplication(sys.argv)
     window = Window(socket)
     window.show()
     sys.exit(app.exec_())
 
+
 def test_variable_entry(data):
     app = QtGui.QApplication(sys.argv)
-    window = VariableEntryDialog(data)
+    window = VariableEntryDialog(None, data)
     window.exec_()
     print window.result
-    sys.exit(app.exec_())
+    sys.exit()
+
 
 if __name__ == "__main__":
     showWindow(sys.argv[1])
     # test_variable_entry(['a', 'b', 'c'])
-

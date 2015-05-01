@@ -71,6 +71,9 @@ function! s:InsertSQLCommand(cmdline) range
     call s:VimSQLRunCommand('insertquery', [g:vimsql_env, a:firstline, a:lastline])
 endfunction
 
+function! s:SQLDescribeSimple()
+    call s:VimSQLRunCommand('describe_simple', [g:vimsql_env, expand("<cWORD>")])
+endfunction
 
 nmap <buffer> <F9> :RSQL<CR>
 nmap <buffer> - :RSQL<CR>
@@ -78,3 +81,4 @@ vmap <buffer> - :RSQL<CR>
 
 " the sid appears to be required to call an s: func directly from a map
 nmap <buffer> <leader>p :call <SID>SQLSetEnv()<CR>
+nmap <buffer> <leader>d :call <SID>SQLDescribeSimple()<CR>
