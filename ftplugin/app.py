@@ -8,8 +8,12 @@ from dateutil import parser
 
 from PyQt4 import Qt, QtGui, QtCore
 from neovim import attach
+import cx_Oracle
 
 from aoc.db.connections import DefaultConnection
+
+import queries
+
 
 window = None
 app = None
@@ -110,6 +114,8 @@ class Window(QtGui.QWidget):
         self.init_gui()
         self.init_vim(socket)
 
+        self.describe_verbose = False
+
         # t = threading.Thread(target=self.listen_to_fifo)
         t = threading.Thread(target=self.listen_for_message)
         t.daemon = True  # ensure the thread dies gracefully at shutdown
@@ -118,7 +124,12 @@ class Window(QtGui.QWidget):
     def init_gui(self):
         self.setWindowTitle("VimSQL 0.3")
 
+        self.font = QtGui.QFont()
+        # self.font.setPointSize(14)
+        self.font.setFamily("Courier New")
+
         self.table = QtGui.QTableWidget(1, 1, self)
+        self.table.setFont(self.font)
         self.table.verticalHeader().setDefaultSectionSize(19)
         self.table.setAlternatingRowColors(True)
 
@@ -163,6 +174,9 @@ class Window(QtGui.QWidget):
         if message is None:
             return
 
+        # reset some things to defaults
+        self.describe_verbose = False
+
         print "New message: {}".format(message)
         ntype, mtype, args = message
 
@@ -188,31 +202,18 @@ class Window(QtGui.QWidget):
         if mtype == 'describe_simple':
             self.handle_describe_simple(args)
 
+        if mtype == 'describe_verbose':
+            self.handle_describe_verbose(args)
+
     def handle_describe_simple(self, args):
         database, object = args[0]
+        self.connect_to_database(database)
         if '.' in object:
             owner, object = object.split('.')
         else:
             owner = None
 
-        query = ("""
-            select
-                column_name,
-                data_type,
-                data_length,
-                nullable,
-                data_default,
-                comments
-            from all_tab_columns
-            natural join all_col_comments
-            where table_name = upper(:name)
-            and (
-                (:owner is not null and owner = upper(:owner))
-                or
-                (:owner is null and owner = user)
-            )
-            order by owner, table_name, column_id
-                 """)
+        query = queries.describe_simple
 
         binds = ['NAME', 'OWNER']
         vars = [object, owner]
@@ -222,6 +223,47 @@ class Window(QtGui.QWidget):
         t = threading.Thread(target=self.run_query,
                              args=(database, query, binds, vars))
         t.start()
+
+    def handle_describe_verbose(self, args):
+        database, object = args[0]
+        self.connect_to_database(database)
+        object = object.upper()
+        if '.' in object:
+            owner, object = object.split('.')
+        else:
+            owner = None
+
+        query = queries.describe_verbose.format(owner, object)
+
+        self.scroll_pause = True
+        self.processing_signal.emit(True)  # hide the table
+        self.describe_verbose = True
+
+        # this must be run directly
+        print("Starting verbose describe..")
+        try:
+            self.cur.callproc("dbms_output.enable", parameters=['1000000'])
+            self.cur.execute(query)
+
+        except Exception as e:
+            self.message_signal.emit("Error: {}".format(e))
+            return
+
+        statusVar = self.cur.var(cx_Oracle.NUMBER)
+        lineVar = self.cur.var(cx_Oracle.STRING)
+        output = []
+        while True:
+            self.cur.callproc("dbms_output.get_line", (lineVar, statusVar))
+            if statusVar.getvalue() != 0:
+                break
+            output.append((lineVar.getvalue(), ''))
+
+        headers = ['DBMS_OUTPUT', '']
+
+        # populate, but on the GUI thread
+        self.pop_signal.emit(output, headers)
+        self.processing_signal.emit(False)  # show the table
+        self.scroll_pause = False
 
     def handle_insertquery(self, args):
         db, first, last = args
@@ -394,11 +436,12 @@ class Window(QtGui.QWidget):
     def add_item(self, x, y, value):
         # color = None if x % 2 else (238, 238, 238, 255)
         color = None
-        if value is None:
+        if value is None and not self.describe_verbose:
             value = "{null}"
             color = (242, 255, 188, 255)
 
         item = QtGui.QTableWidgetItem(str(value))
+        item.setFont(self.font)
         if color:
             item.setBackgroundColor(QtGui.QColor(*color))
         self.table.setItem(x, y, item)

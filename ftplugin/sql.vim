@@ -7,6 +7,7 @@ if !exists('g:vimsql_py_loaded')
     if !exists('g:vimsql_env')
         let g:vimsql_env = 'convtst2'
     endif
+    let s:path = expand('<sfile>:p:h')
 endif
 
 function! s:SQLSetEnv()
@@ -47,7 +48,7 @@ function! s:VimSQLRunCommand(type, args)
         let argv = [
             \ 'python2',
             \ '-u',
-            \ '/home/quasar/.nvim/bundle/VimSql/ftplugin/app.py',
+            \ s:path . '/app.py',
             \ $NVIM_LISTEN_ADDRESS
             \ ]
         let g:vimsql_job_id = jobstart(argv, opts)
@@ -77,6 +78,11 @@ function! s:SQLDescribeSimple()
     call s:VimSQLRunCommand('describe_simple', [g:vimsql_env, a:object])
     echo "Describing object: " . a:object
 endfunction
+function! s:SQLDescribeVerbose()
+    let a:object = expand("<cWORD>")
+    call s:VimSQLRunCommand('describe_verbose', [g:vimsql_env, a:object])
+    echo "Verbosely describing object: " . a:object
+endfunction
 
 nmap <buffer> <silent> <F9> :RSQL<CR>
 nmap <buffer> <silent> - :RSQL<CR>
@@ -85,3 +91,4 @@ vmap <buffer> <silent> - :RSQL<CR>
 " the sid appears to be required to call an s: func directly from a map
 nmap <buffer> <silent> <leader>p :call <SID>SQLSetEnv()<CR>
 nmap <buffer> <silent> <leader>d :call <SID>SQLDescribeSimple()<CR>
+nmap <buffer> <silent> <leader>D :call <SID>SQLDescribeVerbose()<CR>
