@@ -180,30 +180,60 @@ class Window(QtGui.QWidget):
         print "New message: {}".format(message)
         ntype, mtype, args = message
 
-        if mtype == 'query':
-            db, first, last = args[0]
+        message_mapping = {'query': self.handle_query,
+                           'insertquery': self.handle_insertquery,
+                           'describe_simple': self.handle_describe_simple,
+                           'describe_verbose': self.handle_describe_verbose,
+                           'explain': self.handle_explain}
+        try:
+            message_mapping[mtype](args)
+        except KeyEerror:
+            self.message_signal.emit(
+                "Did not understand message from vim: {}".format(message))
 
-            if first == last:
-                first, last = detect_query(self.vim, first)
-            else:
-                first -= 1
+    def handle_query(self, args):
+        db, query = self.parse_query_args(args)
+        self.execute_signal.emit(db, query)
 
-            query = '\n'.join(self.vim.current.buffer[first:last])
+    def parse_query_args(self, args):
+        db, first, last = args[0]
 
-            print db
-            print first, last
-            print query
+        if first == last:
+            first, last = detect_query(self.vim, first)
+        else:
+            first -= 1
 
-            self.execute_signal.emit(db, query)
+        query = '\n'.join(self.vim.current.buffer[first:last])
 
-        if mtype == 'insertquery':
-            self.handle_insertquery(args)
+        print db
+        print first, last
+        print query
 
-        if mtype == 'describe_simple':
-            self.handle_describe_simple(args)
+        return (db, query)
 
-        if mtype == 'describe_verbose':
-            self.handle_describe_verbose(args)
+    def handle_explain(self, args):
+        database, query = self.parse_query_args(args)
+
+        self.connect_to_database(database)
+
+        query = "explain plan for " + query
+
+        self.scroll_pause = True
+        self.processing_signal.emit(True)  # hide the table
+        self.describe_verbose = True
+
+        # this must be run directly
+        print("Starting explain plan...")
+        try:
+            self.cur.execute(query)
+        except Exception as e:
+            self.message_signal.emit("Error: {}".format(e))
+            return
+
+        self.execute_signal.emit(
+            database,
+            "select * from "
+            "table(dbms_xplan.display('PLAN_TABLE', NULL, 'ALL'))")
 
     def handle_describe_simple(self, args):
         database, object = args[0]

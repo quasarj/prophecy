@@ -73,6 +73,11 @@ function! s:InsertSQLCommand(cmdline) range
     call s:VimSQLRunCommand('insertquery', [g:vimsql_env, a:firstline, a:lastline])
 endfunction
 
+command! -complete=shellcmd -nargs=0 -range ESQL <line1>,<line2>call s:ExplainSQLCommand(<q-args>)
+function! s:ExplainSQLCommand(cmdline) range
+    call s:VimSQLRunCommand('explain', [g:vimsql_env, a:firstline, a:lastline])
+endfunction
+
 function! s:SQLDescribeSimple()
     let a:object = expand("<cWORD>")
     call s:VimSQLRunCommand('describe_simple', [g:vimsql_env, a:object])
@@ -84,9 +89,12 @@ function! s:SQLDescribeVerbose()
     echo "Verbosely describing object: " . a:object
 endfunction
 
+
 nmap <buffer> <silent> <F9> :RSQL<CR>
 nmap <buffer> <silent> - :RSQL<CR>
+nmap <buffer> <silent> <leader>ee :ESQL<CR>
 vmap <buffer> <silent> - :RSQL<CR>
+vmap <buffer> <silent> <leader>ee :ESQL<CR>
 
 " the sid appears to be required to call an s: func directly from a map
 nmap <buffer> <silent> <leader>p :call <SID>SQLSetEnv()<CR>
