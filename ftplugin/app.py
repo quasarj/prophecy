@@ -4,16 +4,21 @@ import sys
 import threading
 import time
 import json
-from dateutil import parser
+import logging
 
-from PyQt4 import Qt, QtGui, QtCore
+from dateutil import parser
+from PyQt5 import Qt, QtGui, QtCore, QtWidgets
 from neovim import attach
 import cx_Oracle
 
 from aoc.db.connections import DefaultConnection
+from aoc.util.log import config_logging
 
 import queries
-
+config_logging(filename="vim-prophecy.log",
+               screen_level="INFO",
+               file_level="DEBUG")
+log = logging.getLogger()
 
 window = None
 app = None
@@ -38,8 +43,8 @@ def parse_var_magic(vars):
 
         ret.append(var)
 
-    print("Final parsed vars:")
-    print(ret)
+    log.debug("Final parsed vars:")
+    log.debug(ret)
     return ret
 
 
@@ -56,24 +61,24 @@ def convert_to_date(string):
                        "I tried as hard as I could!".format(string))
 
 
-class VariableEntryDialog(QtGui.QDialog):
+class VariableEntryDialog(QtWidgets.QDialog):
     def __init__(self, parent, variables, defaults=None):  # , data, headers):
-        QtGui.QWidget.__init__(self, parent)
+        QtWidgets.QWidget.__init__(self, parent)
 
-        layout = QtGui.QVBoxLayout(self)
+        layout = QtWidgets.QVBoxLayout(self)
         self.inputs = []
 
         if defaults:
             defaults = dict(zip(variables, defaults))
 
         for v in variables:
-            h = QtGui.QHBoxLayout()
+            h = QtWidgets.QHBoxLayout()
 
-            label = QtGui.QLabel(str(v), self)
+            label = QtWidgets.QLabel(str(v), self)
             if defaults:
-                edit = QtGui.QLineEdit(defaults[v], self)
+                edit = QtWidgets.QLineEdit(defaults[v], self)
             else:
-                edit = QtGui.QLineEdit(self)
+                edit = QtWidgets.QLineEdit(self)
 
             edit.returnPressed.connect(self.onOkayClicked)
 
@@ -83,7 +88,7 @@ class VariableEntryDialog(QtGui.QDialog):
             h.addWidget(edit)
             layout.addLayout(h)
 
-        okay = QtGui.QPushButton("Okay", self)
+        okay = QtWidgets.QPushButton("Okay", self)
         layout.addWidget(okay)
 
         okay.clicked.connect(self.onOkayClicked)
@@ -95,7 +100,7 @@ class VariableEntryDialog(QtGui.QDialog):
         self.accept()
 
 
-class Window(QtGui.QWidget):
+class Window(QtWidgets.QWidget):
 
     pop_signal = QtCore.pyqtSignal(object, object)
     execute_signal = QtCore.pyqtSignal(object, object)
@@ -110,7 +115,7 @@ class Window(QtGui.QWidget):
     scroll_pause = False
 
     def __init__(self, socket):
-        QtGui.QWidget.__init__(self)
+        QtWidgets.QWidget.__init__(self)
         self.init_gui()
         self.init_vim(socket)
 
@@ -128,14 +133,14 @@ class Window(QtGui.QWidget):
         # self.font.setPointSize(14)
         self.font.setFamily("Courier New")
 
-        self.table = QtGui.QTableWidget(1, 1, self)
+        self.table = QtWidgets.QTableWidget(1, 1, self)
         self.table.setFont(self.font)
         self.table.verticalHeader().setDefaultSectionSize(19)
         self.table.setAlternatingRowColors(True)
 
-        self.messageLabel = QtGui.QLabel(self)
+        self.messageLabel = QtWidgets.QLabel(self)
 
-        layout = QtGui.QVBoxLayout(self)
+        layout = QtWidgets.QVBoxLayout(self)
         layout.addWidget(self.table)
 
         layout.addWidget(self.messageLabel)
@@ -164,10 +169,10 @@ class Window(QtGui.QWidget):
                 self.handle_message(self.vim.session.next_message())
                 # self.handle_message(self.vim.next_message())
             except Exception as e:
-                print e
-                print repr(e)
-                print "Vim has disconnected! Shutting down!"
-                QtGui.QApplication.quit()
+                log.warn(e)
+                log.warn(repr(e))
+                log.fatal("Vim has disconnected! Shutting down!")
+                QtWidgets.QApplication.quit()
                 return
 
     def handle_message(self, message):
@@ -177,7 +182,7 @@ class Window(QtGui.QWidget):
         # reset some things to defaults
         self.describe_verbose = False
 
-        print "New message: {}".format(message)
+        log.debug("New message: {}".format(message))
         ntype, mtype, args = message
 
         message_mapping = {'query': self.handle_query,
@@ -187,7 +192,7 @@ class Window(QtGui.QWidget):
                            'explain': self.handle_explain}
         try:
             message_mapping[mtype](args)
-        except KeyEerror:
+        except KeyError:
             self.message_signal.emit(
                 "Did not understand message from vim: {}".format(message))
 
@@ -205,9 +210,9 @@ class Window(QtGui.QWidget):
 
         query = '\n'.join(self.vim.current.buffer[first:last])
 
-        print db
-        print first, last
-        print query
+        log.debug(db)
+        log.debug("{} {}".format(first, last))
+        log.debug(query)
 
         return (db, query)
 
@@ -223,7 +228,7 @@ class Window(QtGui.QWidget):
         self.describe_verbose = True
 
         # this must be run directly
-        print("Starting explain plan...")
+        log.debug("Starting explain plan...")
         try:
             self.cur.execute(query)
         except Exception as e:
@@ -270,7 +275,7 @@ class Window(QtGui.QWidget):
         self.describe_verbose = True
 
         # this must be run directly
-        print("Starting verbose describe..")
+        log.debug("Starting verbose describe..")
         try:
             self.cur.callproc("dbms_output.enable", parameters=['1000000'])
             self.cur.execute(query)
@@ -296,8 +301,8 @@ class Window(QtGui.QWidget):
         self.scroll_pause = False
 
     def handle_insertquery(self, args):
-        db, first, last = args
-        print "insertquery was requested"
+        db, first, last = args[0]  # message comes wrapped in a list
+        log.debug("insertquery was requested")
 
         tab_size = max(
             [len(i) for i in self.headers]) + 1
@@ -421,9 +426,9 @@ class Window(QtGui.QWidget):
         else:
             params = None
 
-        print("Executing query:")
-        print(query)
-        print("Params: {}".format(params))
+        log.debug("Executing query:")
+        log.debug(query)
+        log.debug("Params: {}".format(params))
         try:
             if params is None:
                 self.cur.execute(query)
@@ -464,16 +469,19 @@ class Window(QtGui.QWidget):
                     self.add_item(current + i, j, field)
 
     def add_item(self, x, y, value):
-        # color = None if x % 2 else (238, 238, 238, 255)
+        # log.debug("adding item: {}".format(str(repr(value))))
         color = None
-        if value is None and not self.describe_verbose:
-            value = "{null}"
-            color = (242, 255, 188, 255)
+        if value is None:
+            if not self.describe_verbose:
+                value = "{null}"
+                color = (242, 255, 188, 255)
+            else:
+                value = ""
 
-        item = QtGui.QTableWidgetItem(str(value))
+        item = QtWidgets.QTableWidgetItem(str(value))
         item.setFont(self.font)
         if color:
-            item.setBackgroundColor(QtGui.QColor(*color))
+            item.setBackground(QtGui.QBrush(QtGui.QColor(*color)))
         self.table.setItem(x, y, item)
 
 
@@ -509,14 +517,14 @@ def detect_query(vim, line_number):
 
 
 def showWindow(socket):
-    app = QtGui.QApplication(sys.argv)
+    app = QtWidgets.QApplication(sys.argv)
     window = Window(socket)
     window.show()
     sys.exit(app.exec_())
 
 
 def test_variable_entry(data):
-    app = QtGui.QApplication(sys.argv)
+    app = QtWidgets.QApplication(sys.argv)
     window = VariableEntryDialog(None, data)
     window.exec_()
     print window.result
