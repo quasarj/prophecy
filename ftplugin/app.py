@@ -163,6 +163,7 @@ class Window(QtWidgets.QWidget):
         # self.vim_session = socket_session(socket)
         # self.vim = Nvim.from_session(self.vim_session)
 
+    # This is a main function run by a thread!
     def listen_for_message(self):
         while True:
             try:
@@ -333,6 +334,7 @@ class Window(QtWidgets.QWidget):
 
     def set_message(self, message):
         """Show a message and hdie the table"""
+        log.info(message)
         self.table.hide()
         self.messageLabel.setText(message)
         self.messageLabel.show()
@@ -420,6 +422,7 @@ class Window(QtWidgets.QWidget):
 
         self.cur = self.conn.cursor()
 
+    # This is a main function run by a thread!
     def run_query(self, database, query, binds, vars):
         if binds and vars:
             params = dict(zip(binds, vars))
@@ -532,5 +535,11 @@ def test_variable_entry(data):
 
 
 if __name__ == "__main__":
-    showWindow(sys.argv[1])
+    try:
+        showWindow(sys.argv[1])
+    except Exception as e:
+        log.warn("Unhandled exception caught in main thread. Details follow.")
+        log.warn(e)
+        log.warn(repr(e))
+
     # test_variable_entry(['a', 'b', 'c'])
