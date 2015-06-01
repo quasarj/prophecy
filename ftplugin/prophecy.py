@@ -127,7 +127,7 @@ class Window(QtWidgets.QWidget):
         t.start()
 
     def init_gui(self):
-        self.setWindowTitle("VimSQL 0.3")
+        self.setWindowTitle("Prophecy 0.4")
 
         self.font = QtGui.QFont()
         # self.font.setPointSize(14)

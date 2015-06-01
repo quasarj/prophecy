@@ -48,7 +48,7 @@ function! s:VimSQLRunCommand(type, args)
         let argv = [
             \ 'python2',
             \ '-u',
-            \ s:path . '/app.py',
+            \ s:path . '/prophecy.py',
             \ $NVIM_LISTEN_ADDRESS
             \ ]
         let g:vimsql_job_id = jobstart(argv, opts)
