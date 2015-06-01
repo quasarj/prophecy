@@ -17,6 +17,9 @@ and (
 order by owner, table_name, column_id
 """
 
+# This entire query was taken from the excellent vorax4 project:
+# https://github.com/talek/vorax4
+# All credit goes to Talek
 describe_verbose = """
 declare
   l_owner varchar2(30) := '{}';
